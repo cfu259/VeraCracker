@@ -140,41 +140,46 @@ namespace VeraCrypt
 
 	bool VolumeHeader::Deserialize (const ConstBufferPtr &header, shared_ptr <EncryptionAlgorithm> &ea, shared_ptr <EncryptionMode> &mode, bool truecryptMode)
 	{
-		if (header.Size() != EncryptedHeaderDataSize)
+		/*
+        if (header.Size() != EncryptedHeaderDataSize)
 			throw ParameterIncorrect (SRC_POS);
-
+        //Header will not be decrypted
 		if (truecryptMode && (header[0] != 'T' ||
 			header[1] != 'R' ||
 			header[2] != 'U' ||
 			header[3] != 'E'))
 			return false;
-
 		if (!truecryptMode && (header[0] != 'V' ||
 			header[1] != 'E' ||
 			header[2] != 'R' ||
 			header[3] != 'A'))
 			return false;
-
+        */
 		size_t offset = 4;
-		HeaderVersion =	DeserializeEntry <uint16> (header, offset);
+		HeaderVersion =	5; //DeserializeEntry <uint16> (header, offset);
+        // uint16 HeaderVersion; 0x0005
 
-		if (HeaderVersion < MinAllowedHeaderVersion)
+        // static const uint16 MinAllowedHeaderVersion = 1;
+        if (HeaderVersion < MinAllowedHeaderVersion)
 			return false;
 
-		if (HeaderVersion > CurrentHeaderVersion)
-			throw HigherVersionRequired (SRC_POS);
+		/*if (HeaderVersion > CurrentHeaderVersion)
+			throw HigherVersionRequired (SRC_POS);*/
 
-		if (HeaderVersion >= 4
+		// HeaderVersion is 5
+        /*if (HeaderVersion >= 4
 			&& Crc32::ProcessBuffer (header.GetRange (0, TC_HEADER_OFFSET_HEADER_CRC - TC_HEADER_OFFSET_MAGIC))
 			!= DeserializeEntryAt <uint32> (header, TC_HEADER_OFFSET_HEADER_CRC - TC_HEADER_OFFSET_MAGIC))
 		{
 			return false;
-		}
+		}*/
 
-		RequiredMinProgramVersion = DeserializeEntry <uint16> (header, offset);
+		RequiredMinProgramVersion = 0x010b;
+        // DeserializeEntry <uint16> (header, offset);
+        // uint16 RequiredMinProgramVersion; 0x010b
 
-		if (!truecryptMode && (RequiredMinProgramVersion > Version::Number()))
-			throw HigherVersionRequired (SRC_POS);
+        /*if (!truecryptMode && (RequiredMinProgramVersion > Version::Number()))
+			throw HigherVersionRequired (SRC_POS);*/
 
 		if (truecryptMode)
 		{
@@ -183,43 +188,79 @@ namespace VeraCrypt
 			RequiredMinProgramVersion = CurrentRequiredMinProgramVersion;
 		}
 
-		VolumeKeyAreaCrc32 = DeserializeEntry <uint32> (header, offset);
-		VolumeCreationTime = DeserializeEntry <uint64> (header, offset);
-		HeaderCreationTime = DeserializeEntry <uint64> (header, offset);
-		HiddenVolumeDataSize = DeserializeEntry <uint64> (header, offset);
-		mVolumeType = (HiddenVolumeDataSize != 0 ? VolumeType::Hidden : VolumeType::Normal);
-		VolumeDataSize = DeserializeEntry <uint64> (header, offset);
-		EncryptedAreaStart = DeserializeEntry <uint64> (header, offset);
-		EncryptedAreaLength = DeserializeEntry <uint64> (header, offset);
-		Flags = DeserializeEntry <uint32> (header, offset);
+		// VolumeKeyAreaCrc32 = DeserializeEntry <uint32> (header, offset);
+		// VolumeCreationTime = DeserializeEntry <uint64> (header, offset);
+		// HeaderCreationTime = DeserializeEntry <uint64> (header, offset);
+		HiddenVolumeDataSize = 0;
+        // DeserializeEntry <uint64> (header, offset);
+        // uint64 HiddenVolumeDataSize;
+        mVolumeType = VolumeType::Normal;
+        //(HiddenVolumeDataSize != 0 ? VolumeType::Hidden : VolumeType::Normal);
+        // VolumeType::Enum mVolumeType;
+        VolumeDataSize = 0x4c0000;
+        // DeserializeEntry <uint64> (header, offset);
+        // uint64 VolumeDataSize;
+        EncryptedAreaStart = 0x20000;
+        // DeserializeEntry <uint64> (header, offset);
+        // uint64 EncryptedAreaStart;
+        EncryptedAreaLength = 0x4c0000;
+        // DeserializeEntry <uint64> (header, offset);
+        // uint64 EncryptedAreaLength;
+        Flags = 0;
+        // DeserializeEntry <uint32> (header, offset);
+        // uint32 Flags;
 
-		SectorSize = DeserializeEntry <uint32> (header, offset);
-		if (HeaderVersion < 5)
+		SectorSize = 0x200;
+        // DeserializeEntry <uint32> (header, offset);
+        // uint32 SectorSize;
+        if (HeaderVersion < 5)  // never true
 			SectorSize = TC_SECTOR_SIZE_LEGACY;
 
-		if (SectorSize < TC_MIN_VOLUME_SECTOR_SIZE
+		/*if (SectorSize < TC_MIN_VOLUME_SECTOR_SIZE
 			|| SectorSize > TC_MAX_VOLUME_SECTOR_SIZE
 			|| SectorSize % ENCRYPTION_DATA_UNIT_SIZE != 0)
 		{
 			throw ParameterIncorrect (SRC_POS);
-		}
-
+		}*/
+// check TC_STUFF
 #if !(defined (TC_WINDOWS) || defined (TC_LINUX) || defined (TC_MACOSX))
 		if (SectorSize != TC_SECTOR_SIZE_LEGACY)
 			throw UnsupportedSectorSize (SRC_POS);
 #endif
 
-		offset = DataAreaKeyOffset;
+		offset = DataAreaKeyOffset; // TODO check meaning
 
-		if (VolumeKeyAreaCrc32 != Crc32::ProcessBuffer (header.GetRange (offset, DataKeyAreaMaxSize)))
-			return false;
+		/*if (VolumeKeyAreaCrc32 != Crc32::ProcessBuffer (header.GetRange
+        (offset, DataKeyAreaMaxSize)))
+			return false; // CRC check */
 
-		DataAreaKey.CopyFrom (header.GetRange (offset, DataKeyAreaMaxSize));
+        // this may cause problems if it is missing
+        // DataAreaKey.CopyFrom (header.GetRange (offset, DataKeyAreaMaxSize));
+        //                                         192  ,         256
+	// start of inserted code
+        const byte concatKeys[] = {0x9a, 0xe8, 0x68, 0x03, 0x3d,
+                                   0x0f, 0x35, 0x6f, 0xf3, 0x44,
+                                   0xd8, 0xb8, 0xd2, 0xb2, 0xb3,
+                                   0xd2, 0x2e, 0xa9, 0x43, 0x36,
+                                   0xae, 0x3d, 0x95, 0x11, 0x32,
+                                   0x1d, 0x01, 0x5b, 0xa2, 0xbb,
+                                   0x33, 0xef, 0xac, 0xbd, 0xde,
+                                   0x40, 0xe3, 0xdc, 0xa1, 0xe2,
+                                   0x6f, 0x9a, 0xf8, 0x84, 0x12,
+                                   0x5a, 0x08, 0xb8, 0x5f, 0xa0,
+                                   0x6c, 0x39, 0x21, 0x89, 0x0a,
+                                   0xe0, 0x9f, 0x38, 0xe6, 0x25,
+                                   0xa0, 0xab, 0x38, 0x36};
 
+        ConstBufferPtr conBufPtrConcatKeys(&concatKeys[0], sizeof(concatKeys));
+
+        DataAreaKey.CopyFrom(conBufPtrConcatKeys, sizeof(concatKeys));
+	// end of inserted code
+		
 		ea = ea->GetNew();
 		mode = mode->GetNew();
 
-		if (typeid (*mode) == typeid (EncryptionModeXTS))
+		/*if (typeid (*mode) == typeid (EncryptionModeXTS))
 		{
 			ea->SetKey (header.GetRange (offset, ea->GetKeySize()));
 			mode->SetKey (header.GetRange (offset + ea->GetKeySize(), ea->GetKeySize()));
@@ -228,7 +269,33 @@ namespace VeraCrypt
 		{
 			mode->SetKey (header.GetRange (offset, mode->GetKeySize()));
 			ea->SetKey (header.GetRange (offset + LegacyEncryptionModeKeyAreaSize, ea->GetKeySize()));
-		}
+		}*/
+
+        // start of inserted code
+
+        const byte byteAesKey[] = {0x9a, 0xe8, 0x68, 0x03, 0x3d,
+                                   0x0f, 0x35, 0x6f, 0xf3, 0x44,
+                                   0xd8, 0xb8, 0xd2, 0xb2, 0xb3,
+                                   0xd2, 0x2e, 0xa9, 0x43, 0x36,
+                                   0xae, 0x3d, 0x95, 0x11, 0x32,
+                                   0x1d, 0x01, 0x5b, 0xa2, 0xbb,
+                                   0x33, 0xef};
+
+        const byte byteXtsKey[] = {0xac, 0xbd, 0xde, 0x40, 0xe3,
+                                   0xdc, 0xa1, 0xe2, 0x6f, 0x9a,
+                                   0xf8, 0x84, 0x12, 0x5a, 0x08,
+                                   0xb8, 0x5f, 0xa0, 0x6c, 0x39,
+                                   0x21, 0x89, 0x0a, 0xe0, 0x9f,
+                                   0x38, 0xe6, 0x25, 0xa0, 0xab,
+                                   0x38, 0x36};
+
+        ConstBufferPtr constBufferPtrAesKey(&byteAesKey[0], sizeof(byteAesKey));
+        ConstBufferPtr constBufferPtrXtsKey(&byteXtsKey[0], sizeof(byteXtsKey));
+
+        ea->SetKey(constBufferPtrAesKey);
+        mode->SetKey(constBufferPtrXtsKey);
+
+        // end of inserted code
 
 		ea->SetMode (mode);
 
